@@ -39,53 +39,53 @@ void validateCode();
 
 
 int main(int argc, char* argv[]) {
-	fd_set readfds, inputs; 
-	int outfds;
+    fd_set readfds, inputs; 
+    int outfds;
     int maxfd;
-
+ 
     char message[MSG], command[CMD];
 
     // ./pd PDIP [-d PDport] [-n ASIP] [-p ASport]
-	parseArgs(argc, argv);
+    parseArgs(argc, argv);
 
     fdClient = createPDClient();        // fd for PD (Client) <---> AS (Server)
     fdServer = createPDServer();        // fd for AS (Client) <---> PD (Server)
 
-	fdStdin = STDIN_FILENO;             // fd for stdin (0)
+    fdStdin = STDIN_FILENO;             // fd for stdin (0)
 
     maxfd = std::max(fdClient, fdServer);
 
-	FD_ZERO(&inputs); 
-	FD_SET(fdServer, &inputs);
-	FD_SET(fdStdin, &inputs); 
+    FD_ZERO(&inputs); 
+    FD_SET(fdServer, &inputs);
+    FD_SET(fdStdin, &inputs); 
 
-	while (true) {
-		readfds = inputs;
-		
-		outfds = select(maxfd + 1, &readfds, (fd_set *) NULL, (fd_set *) NULL, NULL); 
-		
-		switch(outfds) {
+    while (true) {
+        readfds = inputs;
+        
+        outfds = select(maxfd + 1, &readfds, (fd_set *) NULL, (fd_set *) NULL, NULL); 
+        
+        switch(outfds) {
 
-			case 0:
+            case 0:
                 // timeout event
-				break;
+                break;
                 
-			case -1:
-				exit(EXIT_FAILURE);
-                
+            case -1:
+                exit(EXIT_FAILURE);
+
             default:
 
-				if(FD_ISSET(fdServer, &readfds)) {
-					validateCode(); 
-				}
+                if(FD_ISSET(fdServer, &readfds)) {
+                    validateCode(); 
+                }
 
                 if (FD_ISSET(fdStdin, &readfds)) {
                     fgets(message, MSG, stdin);         // get line from stdin
                     sscanf(message, "%s", command);     // retrieve command
                 
-					if (strcmp(command, "reg") == 0) {
-						registerUser(message);
-					}
+                    if (strcmp(command, "reg") == 0) {
+                        registerUser(message);
+                    }
 
                     else if (strcmp(command, "exit") == 0) {
                         if (strlen(uid) == 0) 		   // if user has not registered, then safely exit 
@@ -97,82 +97,82 @@ int main(int argc, char* argv[]) {
                         }
                         
                     }
-				}
-		}
-		
+                }
+        }
+        
 
-	}
-	return 0;
+    }
+    return 0;
 }
 
 void parseArgs(int argc, char* argv[]) {
-	int opt; 
+    int opt; 
 
     strcpy(PDIP, argv[1]);
-	while ((opt = getopt(argc, argv, "d:n:p:")) != -1) {
+    while ((opt = getopt(argc, argv, "d:n:p:")) != -1) {
         switch (opt) {
             case 'd':
                 PDport = optarg;
                 break;
             case 'n':
-				strcpy(ASIP, optarg);
+                strcpy(ASIP, optarg);
                 break;
             case 'p':
-				ASport = optarg; 
+                ASport = optarg; 
                 break;
             default:
                 break;
         }
-	}
+    }
 
-	if (strlen(PDIP) == 0)
-		gethostname(PDIP, sizeof(PDIP)); 
-	if (strlen(ASIP) == 0)
-		gethostname(ASIP, sizeof(ASIP)); 
+    if (strlen(PDIP) == 0)
+        gethostname(PDIP, sizeof(PDIP)); 
+    if (strlen(ASIP) == 0)
+        gethostname(ASIP, sizeof(ASIP)); 
 }
 
 // PD (Client) <---> AS (Server)
 int createPDClient() {
-	int fd, errcode;
-	struct addrinfo hints;
+    int fd, errcode;
+    struct addrinfo hints;
 
-	fd = socket(AF_INET, SOCK_DGRAM, 0);	// UDP socket
-	if (fd == -1) /* error */ exit(1);
+    fd = socket(AF_INET, SOCK_DGRAM, 0);	// UDP socket
+    if (fd == -1) /* error */ exit(1);
 
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_INET;				// IPv4
-	hints.ai_socktype = SOCK_DGRAM;			// UDP socket
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;				// IPv4
+    hints.ai_socktype = SOCK_DGRAM;			// UDP socket
 
-	errcode = getaddrinfo(ASIP, ASport, &hints, &resClient);
-	if (errcode != 0) /* error */
-		exit(EXIT_FAILURE);
-	
+    errcode = getaddrinfo(ASIP, ASport, &hints, &resClient);
+    if (errcode != 0) /* error */
+        exit(EXIT_FAILURE);
+    
     return fd;
 }
 
 // AS (Client) <---> PD (Server)
 int createPDServer() {
     int fd, errcode;
-	ssize_t n;
-	struct addrinfo hints;
+    ssize_t n;
+    struct addrinfo hints;
 
-	fd = socket(AF_INET, SOCK_DGRAM, 0);	// UDP socket
-	if (fd == -1) /* error */ exit(1);
+    fd = socket(AF_INET, SOCK_DGRAM, 0);	// UDP socket
+    if (fd == -1) /* error */ exit(1);
 
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_INET;				// IPv4
-	hints.ai_socktype = SOCK_DGRAM;			// UDP socket
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;				// IPv4
+    hints.ai_socktype = SOCK_DGRAM;			// UDP socket
     // PASSIVE: server (accepts connections)
     // NUMERICSERV: numeric port string
-	hints.ai_flags = AI_PASSIVE | AI_NUMERICSERV;
+    hints.ai_flags = AI_PASSIVE | AI_NUMERICSERV;
 
-	errcode = getaddrinfo(NULL, PDport, &hints, &resServer);
-	if (errcode != 0) 
-		exit(EXIT_FAILURE);
+    errcode = getaddrinfo(NULL, PDport, &hints, &resServer);
+    if (errcode != 0) 
+        exit(EXIT_FAILURE);
 
-	n = bind(fd, resServer->ai_addr, resServer->ai_addrlen);
-	if (n == -1) 
-		exit(EXIT_FAILURE);
-	
-	return fd;
+    n = bind(fd, resServer->ai_addr, resServer->ai_addrlen);
+    if (n == -1) 
+        exit(EXIT_FAILURE);
+    
+    return fd;
 }
