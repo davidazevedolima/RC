@@ -14,9 +14,9 @@
 #define PDPORT "57048"
 
 char  PDIP[IPLENGTH];
-char* PDport = PDPORT;
+char* PDport = (char*) PDPORT;
 char  ASIP[IPLENGTH];
-char* ASport = ASPORT;
+char* ASport = (char*) ASPORT;
 
 // ./pd PDIP [-d PDport] [-n ASIP] [-p ASport]
 
