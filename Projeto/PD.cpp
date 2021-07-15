@@ -29,14 +29,13 @@ void receiveASmessage(char* message);
 int main(int argc, char* argv[]) {
     parseArgs(argc, argv);
 
-    printf("./pd %s -d %s -n %s -p %s", PDIP, PDport, ASIP, ASport);
 	return 0;
 }
 
 void parseArgs(int argc, char* argv[]) {
 	int opt; 
 
-
+    strcpy(PDIP, argv[1]);
 	while ((opt = getopt(argc, argv, "d:n:p:")) != -1) {
         switch (opt) {
             case 'd':
@@ -57,5 +56,4 @@ void parseArgs(int argc, char* argv[]) {
 		gethostname(PDIP, sizeof(PDIP)); 
 	if (strlen(ASIP) == 0)
 		gethostname(ASIP, sizeof(ASIP)); 
-	
 }
