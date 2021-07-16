@@ -36,8 +36,8 @@ char password[PASS];
 
 void parseArgs(int argc, char* argv[]);
 
-int createPDClient();
-int createPDServer();
+int createUDPClient();
+int createUDPServer();
 
 void sendMessage(char* message, bool client);
 void receiveMessage(char* message, bool client);
@@ -62,8 +62,8 @@ int main(int argc, char* argv[]) {
     // ./pd PDIP [-d PDport] [-n ASIP] [-p ASport]
     parseArgs(argc, argv);
 
-    fdClient = createPDClient();        // fd for PD (Client) <---> AS (Server)
-    fdServer = createPDServer();        // fd for AS (Client) <---> PD (Server)
+    fdClient = createUDPClient();        // fd for PD (Client) <---> AS (Server)
+    fdServer = createUDPServer();        // fd for AS (Client) <---> PD (Server)
 
     fdStdin = STDIN_FILENO;             // fd for stdin (0)
 
@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 if (FD_ISSET(fdStdin, &readfds)) {
-                    fgets(message, MSG, stdin);             // get line from stdin
+                    fgets(message, MSG, stdin);       // get line from stdin
                     sscanf(message, "%s", command);   // retrieve command
                 
                     if (strcmp(command, "reg") == 0) {
@@ -148,14 +148,14 @@ void parseArgs(int argc, char* argv[]) {
 }
 
 // PD (Client) <---> AS (Server)
-int createPDClient() {
+int createUDPClient() {
     int fd, errcode;
     struct addrinfo hints;
 
     fd = socket(AF_INET, SOCK_DGRAM, 0);	// UDP socket
     if (fd == -1) {
         std::cerr << "Error while creating socket." << std::endl;
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     memset(&hints, 0, sizeof(hints));
@@ -172,7 +172,7 @@ int createPDClient() {
 }
 
 // AS (Client) <---> PD (Server)
-int createPDServer() {
+int createUDPServer() {
     int fd, errcode;
     ssize_t n;
     struct addrinfo hints;
@@ -180,7 +180,7 @@ int createPDServer() {
     fd = socket(AF_INET, SOCK_DGRAM, 0);	// UDP socket
     if (fd == -1) {
         std::cerr << "Error while creating socket." << std::endl;
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     memset(&hints, 0, sizeof(hints));
@@ -240,7 +240,7 @@ void receiveMessage(char* message, bool client) {
 	n = recvfrom(fd, message, 512, 0, (struct sockaddr*) &addr, &addrlen);
 	if (n == -1) {
         std::cerr << "Error while receiving message." << std::endl;
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     message[n] = '\0';
 }
