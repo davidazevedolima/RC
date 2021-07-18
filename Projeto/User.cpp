@@ -19,9 +19,10 @@
 #define USER 6
 #define PASS 9
 #define VC 5
-#define FILE 25 
+#define FILENAME 25 
 #define FILESIZE 11
 #define LIST 550
+#define MAXBUFFER 1024
 #define ASPORT "58048"
 #define FSPORT "59048"
 
@@ -47,15 +48,25 @@ int createTCPClient(bool AS);
 void closeTCPClient(bool AS);
 
 void sendMessage(int fd, char* message, size_t msgLength);
-void receiveMessage(int fd, char* message, size_t msgLength);
+int receiveMessage(int fd, char* message, size_t msgLength, bool file = false);
 
 void login(char* message); 
+
 void requestOperation(char* message); 
+int generateRID(); 
+
 void validate(char* message);
+
 void listFiles(char* message);
+void displayList(char* message); 
+
 void retrieveFile(char* message); 
-void uploadFile(char* message); 
+void saveFile(char* fileName); 
+
+void uploadFile(char* message);
+
 void deleteFile(char* message);
+
 void removeUser(char* message);
 
 
@@ -227,8 +238,9 @@ void sendMessage(int fd, char* message, size_t length) {
     }
 }
 
-void receiveMessage(int fd, char* message, size_t length) {
+int receiveMessage(int fd, char* message, size_t length, bool file = false) {
     ssize_t nleft, nread;
+    int total = 0;
 
     char* ptr = message;
     nleft = length;
@@ -243,12 +255,17 @@ void receiveMessage(int fd, char* message, size_t length) {
             break;          //closed by peer
         nleft -= nread;
         ptr += nread;
+        total += nread; 
 
-        /* if (message[length - nleft - 1] == '\n')
-            break; */
+        // stop reading after newline
+        if (!file && message[length - nleft - 1] == '\n')
+            break;
     }
     
-    ptr[length - nleft] = '\0';
+    if (!file)
+        ptr[length - nleft] = '\0';
+
+    return nread; 
 }
 
 void login(char* message) {
@@ -281,7 +298,7 @@ void login(char* message) {
 
 void requestOperation(char* message) {
     char fileOp;
-    char fileName[FILE];
+    char fileName[FILENAME];
     char status[10];
 
     // req Fop Filename 
@@ -378,7 +395,7 @@ void listFiles(char* message) {
 void displayList(char* message) {
     int listSize;
     char* ptr = message;
-    char fileName[FILE];
+    char fileName[FILENAME];
     char fileSize[FILESIZE];
 
     // RLS N
@@ -397,4 +414,94 @@ void displayList(char* message) {
         sscanf(ptr, "%s %s", fileName, fileSize); 
         std::cout << i << ". " << fileName << " " << fileSize << "B." << std::endl;  
     }
+}
+
+void retrieveFile(char* message) {
+    char fileName[FILENAME];
+    char status[10];
+
+    // retrieve filename
+    //        r filename
+    sscanf(message, "%*s %s", fileName);
+
+    // RTV UID TID Fname
+    sprintf(message, "RTV %s %s %s\n", uid, tid, fileName); 
+    
+    sendMessage(fdFS, message, strlen(message));
+    memset(message, '\0', sizeof(message));
+
+    // RRT status
+    receiveMessage(fdFS, message, 7);
+    sscanf(message, "RRT %s", status); 
+
+    memset(message, '\0', sizeof(message));
+
+    if (strcmp(status, "EOF") == 0) {
+        std::cout << "File " << fileName << " is not available." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "NOK") == 0) {
+        std::cout << "Content not available in FS for user: " << uid << "." << std::endl;
+        return;
+    } 
+    else if (strcmp(status, "INV") == 0) {
+        std::cout << "Validation error for TID=" << tid << "." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "ERR") == 0) {
+        std::cout << "RRT request not properly formulated." << std::endl;
+        return;
+    }
+    // [Fsize data]
+    else if (strcmp(status, "OK") == 0) {
+        saveFile(fileName);
+        std::cout << "The file " << fileName << " was stored in the current working directory." << std::endl;
+    }
+}
+
+void saveFile(char* fileName) {
+    FILE* file;
+    int fileSize;
+    
+    ssize_t nleft, nread;
+    char buffer[MAXBUFFER];
+
+    file = fopen(fileName, "w");
+
+    if (file == NULL) {
+        std::cout << "Could not open file." << std::endl;
+        return; 
+    }
+    
+    fileSize = readFileSize();
+    nleft = fileSize;
+
+    while (nleft > 0) {
+        memset(buffer, '\0', sizeof(buffer));
+        
+        nread = receiveMessage(fdFS, buffer, MAXBUFFER);
+        if (nread == 0)
+            break; 
+
+        nleft -= nread;
+
+        fwrite(buffer, sizeof(char), nread, file); 
+    }
+
+    fclose(file);
+}
+
+int readFileSize() {
+    char message[5];
+    int fileSize = 0;
+
+    receiveMessage(fdFS, message, 1);
+    while (strcmp(message, " ") != 0) {
+        fileSize = fileSize * 10 + atoi(message);
+
+        memset(message, '\0', sizeof(message));
+        receiveMessage(fdFS, message, 1);
+    }
+
+    return fileSize;
 }

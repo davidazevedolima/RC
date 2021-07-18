@@ -329,7 +329,7 @@ void validateCode() {
 
     // RVC status
     if (strcmp(valUser, uid) != 0)
-       sprintf(message, "RVC %s NOK\n", valUser);
+        sprintf(message, "RVC %s NOK\n", valUser);
     else
         sprintf(message, "RVC %s OK\n", uid);
         
