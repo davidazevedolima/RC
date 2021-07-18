@@ -62,9 +62,11 @@ void displayList(char* message);
 
 void retrieveFile(char* message); 
 void saveFile(char* fileName);
-int readFileSize();
+long readFileSize();
 
 void uploadFile(char* message);
+long getFileSize(char* fileName); 
+void uploadData(char* fileName, long fileSize); 
 
 void deleteFile(char* message);
 
@@ -462,7 +464,7 @@ void retrieveFile(char* message) {
 
 void saveFile(char* fileName) {
     FILE* file;
-    int fileSize;
+    long fileSize;
     
     ssize_t nleft, nread;
     char buffer[MAXBUFFER];
@@ -492,9 +494,9 @@ void saveFile(char* fileName) {
     fclose(file);
 }
 
-int readFileSize() {
+long readFileSize() {
     char message[5];
-    int fileSize = 0;
+    long fileSize = 0;
 
     receiveMessage(fdFS, message, 1);
     while (strcmp(message, " ") != 0) {
@@ -505,4 +507,175 @@ int readFileSize() {
     }
 
     return fileSize;
+}
+
+void uploadFile(char* message) {
+    char fileName[FILENAME];
+    char status[10];
+    long fileSize; 
+
+    // upload filename
+    //       u filename
+    sscanf(message, "%*s %s", fileName);
+
+    fileSize = getFileSize(fileName);
+    if (fileSize == -1)
+        std::cout << "Could not open file." << std::endl;
+
+    // UPL UID TID Fname Fsize data 
+    sprintf(message, "UPL %s %d %s %ld ", uid, tid, fileName, fileSize);
+    sendMessage(fdFS, message, strlen(message));
+
+    memset(message, '\0', sizeof(message));
+
+    uploadData(fileName, fileSize);
+    
+    // RUP status
+    receiveMessage(fdFS, message, MSG); 
+    
+    sscanf(message, "RUP %s", status);
+    
+    if (strcmp(status, "DUP") == 0) {
+        std::cout << "File " << fileName << " already exists." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "FULL") == 0) {
+        std::cout << "User " << uid << " already has maximum file capacity." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "INV") == 0) {
+        std::cout << "AS validation error." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "ERR") == 0) {
+        std::cout << "UPL request not properly formulated." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "OK") == 0) {
+        std::cout << "Success uploading " << fileName << "." << std::endl;
+        return;
+    }
+
+}
+
+long getFileSize(char* fileName) {
+    FILE* file;
+    long fileSize;
+    
+    file = fopen(fileName, "rb");
+    if (file == NULL)
+        return -1;
+    
+    // calculates size of file 
+    fseek(file, 0, SEEK_END); 
+    fileSize = ftell(file); 
+    fseek(file, 0, SEEK_SET);
+    
+    fclose(file);
+    
+    return fileSize; 
+}
+
+void uploadData(char* fileName, long fileSize) {
+    FILE* file;
+    ssize_t nleft, nwritten;
+    char buffer[MAXBUFFER];
+    
+    file = fopen(fileName, "rb");
+    if (file == NULL) {
+        std::cout << "Could not open file." << std::endl;
+        return; 
+    }
+
+    nleft = fileSize;
+    while (nleft > MAXBUFFER) {
+        fread(buffer, sizeof(char), MAXBUFFER, file); 
+        
+        sendMessage(fdFS, buffer, MAXBUFFER); 
+
+        memset(buffer, '\0', sizeof(buffer));
+        
+        nleft -= MAXBUFFER; 
+    }
+
+    fread(buffer, sizeof(char), nleft, file);
+
+    sendMessage(fdFS, buffer, nleft);
+    sendMessage(fdFS, (char*) "\n", 1); 
+
+    fclose(file);
+}
+
+void deleteFile(char* message) {
+    char fileName[FILENAME];
+    char status[10];
+
+    // delete filename
+    //      d filename
+    sscanf(message, "%*s %s", fileName);
+
+    // DEL UID TID Fname
+    sprintf(message, "DEL %s %d %s\n", uid, tid, fileName); 
+    sendMessage(fdFS, message, strlen(message));
+
+    memset(message, '\0', sizeof(message));
+
+    // RDL status
+    receiveMessage(fdFS, message, MSG); 
+
+    sscanf(message, "RDL %s", status); 
+
+    if (strcmp(status, "OK") == 0) {
+        std::cout << "Success deleting " << fileName << "." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "EOF") == 0) {
+        std::cout << "File " << fileName << " not available." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "NOK") == 0) {
+        std::cout << "User " << uid << " does not exist." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "INV") == 0) {
+        std::cout << "AS validation error." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "ERR") == 0) {
+        std::cout << "DEL request not properly formulated." << std::endl;
+        return;
+    }
+}
+
+void removeUser(char* message) {
+    char status[10];
+
+    // REM UID TID
+    sprintf(message, "REM %s %d\n", uid, tid); 
+    sendMessage(fdFS, message, strlen(message));
+
+    memset(message, '\0', sizeof(message));
+    
+    // RRM status
+    receiveMessage(fdFS, message, MSG); 
+    
+    sscanf(message, "RRM %s", status);
+    
+    if (strcmp(status, "OK") == 0) {
+        std::cout << "User " << uid << " removed successfully." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "NOK") == 0) {
+        std::cout << "User " << uid << " does not exist." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "INV") == 0) {
+        std::cout << "AS validation error." << std::endl;
+        return;
+    }
+    else if (strcmp(status, "ERR") == 0) {
+        std::cout << "REM request not properly formulated." << std::endl;
+        return;
+    }
+
 }
