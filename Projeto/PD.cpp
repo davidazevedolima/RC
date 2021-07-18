@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
     fdClient = createUDPClient();        // fd for PD (Client) <---> AS (Server)
     fdServer = createUDPServer();        // fd for AS (Client) <---> PD (Server)
 
-    fdStdin = STDIN_FILENO;             // fd for stdin (0)
+    fdStdin = STDIN_FILENO;              // fd for stdin (0)
 
     maxfd = std::max(fdClient, fdServer);
 
@@ -192,7 +192,7 @@ int createUDPServer() {
 
     errcode = getaddrinfo(NULL, PDport, &hints, &resServer);
     if (errcode != 0) {
-        std::cerr << "Error while getting address info" << std::endl;
+        std::cerr << "Error while getting address info." << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -374,7 +374,7 @@ bool exitAS() {
         freeaddrinfo(resClient); 
         close(fdClient);
         freeaddrinfo(resServer);
-        close(fdServer); 
+        close(fdServer);
         return true; 
     }
     else {
