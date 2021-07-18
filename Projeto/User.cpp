@@ -48,7 +48,7 @@ int createTCPClient(bool AS);
 void closeTCPClient(bool AS);
 
 void sendMessage(int fd, char* message, size_t msgLength);
-int receiveMessage(int fd, char* message, size_t msgLength, bool file = false);
+int receiveMessage(int fd, char* message, size_t length, bool file = false);
 
 void login(char* message); 
 
@@ -61,7 +61,8 @@ void listFiles(char* message);
 void displayList(char* message); 
 
 void retrieveFile(char* message); 
-void saveFile(char* fileName); 
+void saveFile(char* fileName);
+int readFileSize();
 
 void uploadFile(char* message);
 
@@ -238,7 +239,7 @@ void sendMessage(int fd, char* message, size_t length) {
     }
 }
 
-int receiveMessage(int fd, char* message, size_t length, bool file = false) {
+int receiveMessage(int fd, char* message, size_t length, bool file) {
     ssize_t nleft, nread;
     int total = 0;
 
@@ -302,16 +303,16 @@ void requestOperation(char* message) {
     char status[10];
 
     // req Fop Filename 
-    sscanf(message, "req %c %s", fileOp, fileName);
+    sscanf(message, "req %c %s", &fileOp, fileName);
     
     // generate RID for the requested operation
     rid = generateRID(); 
 
     // REQ UID RID Fop [Fname]
     if (fileOp == 'R' || fileOp == 'U' || fileOp == 'D')
-        sprintf(message, "REQ %s %d %s %s\n", uid, rid, fileOp, fileName);
+        sprintf(message, "REQ %s %d %c %s\n", uid, rid, fileOp, fileName);
     else
-        sprintf(message, "REQ %s %d %s\n", uid, rid, fileOp);
+        sprintf(message, "REQ %s %d %c\n", uid, rid, fileOp);
 
     sendMessage(fdAS, message, strlen(message));
     memset(message, '\0', sizeof(message));
@@ -357,7 +358,7 @@ void validate(char* message) {
     
     // RAU TID
     receiveMessage(fdAS, message, MSG); 
-    sscanf(message, "RAU %d\n", tid); 
+    sscanf(message, "RAU %d\n", &tid); 
     
     if(tid == 0) {
         std::cout << "Authentication failed." << std::endl;
@@ -425,7 +426,7 @@ void retrieveFile(char* message) {
     sscanf(message, "%*s %s", fileName);
 
     // RTV UID TID Fname
-    sprintf(message, "RTV %s %s %s\n", uid, tid, fileName); 
+    sprintf(message, "RTV %s %d %s\n", uid, tid, fileName); 
     
     sendMessage(fdFS, message, strlen(message));
     memset(message, '\0', sizeof(message));
