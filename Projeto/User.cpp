@@ -1,11 +1,18 @@
+/**************************
+
+    92447 - David Lima
+    92449 - Diana Moniz
+
+***************************/
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <algorithm>
-#include <time.h>
 #include <iostream>
 #include <ctype.h>
+#include <time.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -37,9 +44,7 @@ struct addrinfo *resAS, *resFS;
 
 char uid[USER];
 char password[PASS];
-
 int rid = 0;
-
 int tid;
 
 void parseArgs(int argc, char* argv[]);
@@ -74,8 +79,8 @@ void removeUser(char* message);
 
 
 int main(int argc, char* argv[]) {
-    char message[MSG];
-    char command[CMD];
+    char message[MSG], command[CMD];
+
     // ./user [-n ASIP] [-p ASport] [-m FSIP] [-q FSport]
     parseArgs(argc, argv); 
     
@@ -144,6 +149,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
+// ./user [-n ASIP] [-p ASport] [-m FSIP] [-q FSport]
 void parseArgs(int argc, char* argv[]) {
     int opt; 
 
@@ -231,8 +237,8 @@ void sendMessage(int fd, char* message, size_t length) {
     while(nleft > 0) {
         nwritten = write(fd, ptr, nleft);
         
-        if(nwritten <= 0) {
-            std::cerr << "Error while writing to socket." << std::endl;
+        if(nwritten == -1) {
+            std::cerr << "Error while writing to socket: " << strerror(errno) << "." << std::endl;
             exit(EXIT_FAILURE);
         }
         
@@ -310,6 +316,7 @@ void requestOperation(char* message) {
     // generate RID for the requested operation
     rid = generateRID(); 
 
+    memset(message, '\0', sizeof(message));
     // REQ UID RID Fop [Fname]
     if (fileOp == 'R' || fileOp == 'U' || fileOp == 'D')
         sprintf(message, "REQ %s %d %c %s\n", uid, rid, fileOp, fileName);
@@ -588,6 +595,7 @@ void uploadData(char* fileName, long fileSize) {
     }
 
     nleft = fileSize;
+    std::cout << "Before large." << std::endl;
     while (nleft > MAXBUFFER) {
         fread(buffer, sizeof(char), MAXBUFFER, file); 
         
@@ -600,7 +608,9 @@ void uploadData(char* fileName, long fileSize) {
 
     fread(buffer, sizeof(char), nleft, file);
 
+    std::cout << "Before nleft." << std::endl;
     sendMessage(fdFS, buffer, nleft);
+    std::cout << "Before newline." << std::endl;
     sendMessage(fdFS, (char*) "\n", 1); 
 
     fclose(file);

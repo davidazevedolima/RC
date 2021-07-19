@@ -1,10 +1,10 @@
 all: PD User
 
 PD : 
-	g++ -o pd pd.cpp
+	g++ -o pd PD.cpp
 
 User : 
-	g++ -o user user.cpp
+	g++ -o user User.cpp
 
 clean :	
 	@echo ...cleaning...

@@ -1,3 +1,10 @@
+/**************************
+
+    92447 - David Lima
+    92449 - Diana Moniz
+
+***************************/
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -30,6 +37,8 @@ char* ASport = (char*) ASPORT;
 int fdClient, fdServer, fdStdin;
 
 struct addrinfo *resClient, *resServer;
+struct sockaddr_in addrServer;
+socklen_t addrLenServer;
 
 char uid[USER];
 char password[PASS];
@@ -49,7 +58,8 @@ bool validPassword(char* password);
 void validateCode();
 char* fopName(char fileOp); 
 
-bool exitAS(); 
+bool exitAS();
+void closeSockets();
 
 
 int main(int argc, char* argv[]) {
@@ -67,17 +77,17 @@ int main(int argc, char* argv[]) {
 
     fdStdin = STDIN_FILENO;              // fd for stdin (0)
 
-    maxfd = std::max(fdClient, fdServer);
-
-    FD_ZERO(&inputs); 
-    FD_SET(fdServer, &inputs);
-    FD_SET(fdStdin, &inputs); 
+    maxfd = fdServer;
 
     while (true) {
-        readfds = inputs;
 
-        outfds = select(maxfd + 1, &readfds, (fd_set *) NULL, (fd_set *) NULL, NULL); 
-        
+        // reset file descriptor set
+        FD_ZERO(&readfds); 
+        FD_SET(fdServer, &readfds);
+        FD_SET(fdStdin, &readfds); 
+
+        outfds = select(maxfd + 1, &readfds, (fd_set *) NULL, (fd_set *) NULL, (struct timeval *) NULL); 
+
         switch(outfds) {
 
             case 0:
@@ -90,29 +100,31 @@ int main(int argc, char* argv[]) {
 
             default:
 
+                // read from UDP server
                 if(FD_ISSET(fdServer, &readfds)) {
                     validateCode(); 
                 }
-
+                
+                // read commands from stdin 
                 if (FD_ISSET(fdStdin, &readfds)) {
                     fgets(message, MSG, stdin);       // get line from stdin
                     sscanf(message, "%s", command);   // retrieve command
                 
+                    // register user
                     if (strcmp(command, "reg") == 0) {
                         registerUser(message);
                     }
-
+                    
+                    // exit from pd
                     else if (strcmp(command, "exit") == 0) {
                         if (strlen(uid) == 0) {		   // if user has not registered, then safely exit 
                             std::cout << "Exiting..." << std::endl;
                             exit(EXIT_SUCCESS);
                         }
                         else {
-                            bool exitSuccess = exitAS(); 
-                            if (exitSuccess) {
-                                std::cout << "Exiting..." << std::endl;
-                                exit(EXIT_SUCCESS);
-                            }
+                            exitAS(); 
+                            std::cout << "Exiting..." << std::endl;
+                            exit(EXIT_SUCCESS);
                         }  
                     }
                 }
@@ -121,6 +133,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
+// ./pd PDIP [-d PDport] [-n ASIP] [-p ASport]
 void parseArgs(int argc, char* argv[]) {
     int opt; 
 
@@ -147,7 +160,7 @@ void parseArgs(int argc, char* argv[]) {
         gethostname(ASIP, sizeof(ASIP)); 
 }
 
-// PD (Client) <---> AS (Server)
+// Establish connection: PD (Client) <---> AS (Server)
 int createUDPClient() {
     int fd, errcode;
     struct addrinfo hints;
@@ -171,31 +184,31 @@ int createUDPClient() {
     return fd;
 }
 
-// AS (Client) <---> PD (Server)
+// Establish connection: AS (Client) <---> PD (Server)
 int createUDPServer() {
     int fd, errcode;
     ssize_t n;
     struct addrinfo hints;
 
-    fd = socket(AF_INET, SOCK_DGRAM, 0);	// UDP socket
-    if (fd == -1) {
-        std::cerr << "Error while creating socket." << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;				// IPv4
-    hints.ai_socktype = SOCK_DGRAM;			// UDP socket
+    hints.ai_socktype = SOCK_DGRAM;         // UDP socket
     // PASSIVE: server (accepts connections)
-    // NUMERICSERV: numeric port string
+    // NUMERICSERV: numeric port string 
     hints.ai_flags = AI_PASSIVE | AI_NUMERICSERV;
 
-    errcode = getaddrinfo(NULL, PDport, &hints, &resServer);
+    errcode = getaddrinfo(PDIP, PDport, &hints, &resServer);
     if (errcode != 0) {
         std::cerr << "Error while getting address info." << std::endl;
         exit(EXIT_FAILURE);
     }
 
+    fd = socket(resServer->ai_family, resServer->ai_socktype, resServer->ai_protocol);	// UDP socket
+    if (fd == -1) {
+        std::cerr << "Error while creating socket." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    
     n = bind(fd, resServer->ai_addr, resServer->ai_addrlen);
     if (n == -1) {
         std::cerr << "Error while binding server socket." << std::endl;
@@ -219,7 +232,13 @@ void sendMessage(char* message, bool client) {
         res = resServer; 
     }
 
-    n = sendto(fd, message, strlen(message), 0, res->ai_addr, res->ai_addrlen);
+    if (client)
+        n = sendto(fd, message, strlen(message), 0, res->ai_addr, res->ai_addrlen);
+    else {
+        addrLenServer = sizeof(addrServer);
+        n = sendto(fd, message, strlen(message), 0, (struct sockaddr*)&addrServer, addrLenServer);
+    }
+    
 	if (n == -1) {
         std::cerr << "Error while sending message." << std::endl;
         exit(EXIT_FAILURE);
@@ -237,7 +256,13 @@ void receiveMessage(char* message, bool client) {
     else
         fd = fdServer;
 
-	n = recvfrom(fd, message, 512, 0, (struct sockaddr*) &addr, &addrlen);
+    if (client)
+	    n = recvfrom(fd, message, 512, 0, (struct sockaddr*) &addr, &addrlen);
+    else {
+        addrLenServer = sizeof(addrServer);
+        n = recvfrom(fd, message, 512, 0, (struct sockaddr*) &addrServer, &addrLenServer);
+    }
+
 	if (n == -1) {
         std::cerr << "Error while receiving message." << std::endl;
         exit(EXIT_FAILURE);
@@ -264,22 +289,25 @@ void registerUser(char* message) {
         return;
     }
 
+    memset(message, '\0', strlen(message));
+
     // REG UID pass PDIP PDport
     sprintf(message, "REG %s %s %s %s\n", regUser, regPass, PDIP, PDport);
+    
     // Send message to AS as PD client 
     sendMessage(message, true);
-    memset(message, '\0', sizeof(message));
+    memset(message, '\0', strlen(message));
 
     // RRG status
     receiveMessage(message, true); 
-    sscanf(message, "RRG %s\n", status); 
+    sscanf(message, "RRG %s", status);
     
     if (strcmp(status, "OK") == 0) {
         strcpy(uid, regUser);
         strcpy(password, regPass); 
         std::cout << "Registration successful." << std::endl;
     }
-    else 
+    else if (strcmp(status, "NOK") == 0)
         std::cout << "Registration unsuccessful." << std::endl;
 }
 
@@ -370,15 +398,22 @@ bool exitAS() {
     if (strcmp(status, "OK") == 0) {
         std::cout << "Unregistration successful" << std::endl;
 
-        // close sockets
-        freeaddrinfo(resClient); 
-        close(fdClient);
-        freeaddrinfo(resServer);
-        close(fdServer);
+        closeSockets();
+
         return true; 
     }
     else {
         std::cout << "Unregistration failed" << std::endl;
+
+        closeSockets();
+
         return false; 
     }
+}
+
+void closeSockets() {
+    freeaddrinfo(resClient); 
+    close(fdClient);
+    freeaddrinfo(resServer);
+    close(fdServer);
 }
